@@ -74,6 +74,11 @@
         .delete-item-btn {
             flex-shrink: 0;
         }
+        .action-buttons {
+            margin-top: 1rem;
+            display: flex;
+            gap: 0.5rem;
+        }
     </style>
 </head>
 <body>
@@ -558,26 +563,6 @@
                         listMenu.appendChild(li);
                     });
 
-                    // Add Export and Import buttons at the bottom
-                    const exportLi = document.createElement('li');
-                    exportLi.className = 'nav-item';
-                    const exportButton = document.createElement('button');
-                    exportButton.className = 'btn btn-outline-secondary w-100 text-start';
-                    exportButton.innerText = 'Export DB';
-                    exportButton.addEventListener('click', () => this.exportDatabase());
-                    exportLi.appendChild(exportButton);
-                    listMenu.appendChild(exportLi);
-
-                    const importLi = document.createElement('li');
-                    importLi.className = 'nav-item';
-                    const importButton = document.createElement('button');
-                    importButton.className = 'btn btn-outline-secondary w-100 text-start';
-                    importButton.innerText = 'Import DB';
-                    importButton.addEventListener('click', () => document.getElementById('importDbInput').click());
-                    importLi.appendChild(importButton);
-                    listMenu.appendChild(importLi);
-
-                    // Desktop drag-and-drop for lists
                     const draggables = listMenu.querySelectorAll('.draggable');
                     draggables.forEach(draggable => {
                         draggable.setAttribute('draggable', 'true');
@@ -601,7 +586,6 @@
                         });
                     });
 
-                    // Mobile touch drag-and-drop for lists
                     let touchStartY = 0;
                     let touchElement = null;
                     let touchIndex = null;
@@ -672,6 +656,25 @@
                     todoList.appendChild(itemDiv);
                 });
 
+                // Add Export and Import buttons at the bottom of the Wants list
+                if (this.currentList === 'Wants') {
+                    const buttonContainer = document.createElement('div');
+                    buttonContainer.className = 'action-buttons';
+                    const exportButton = document.createElement('button');
+                    exportButton.className = 'btn btn-outline-secondary';
+                    exportButton.innerText = 'Export DB';
+                    exportButton.addEventListener('click', () => this.exportDatabase());
+                    buttonContainer.appendChild(exportButton);
+
+                    const importButton = document.createElement('button');
+                    importButton.className = 'btn btn-outline-secondary';
+                    importButton.innerText = 'Import DB';
+                    importButton.addEventListener('click', () => document.getElementById('importDbInput').click());
+                    buttonContainer.appendChild(importButton);
+
+                    todoList.appendChild(buttonContainer);
+                }
+
                 const draggables = todoList.querySelectorAll('.draggable');
                 draggables.forEach(draggable => {
                     draggable.setAttribute('draggable', 'true');
@@ -684,7 +687,9 @@
                     });
                     draggable.addEventListener('dragover', (e) => {
                         e.preventDefault();
-                    });
+                   
+
+ });
                     draggable.addEventListener('drop', (e) => {
                         e.preventDefault();
                         const fromIndex = parseInt(e.dataTransfer.getData('text/plain'));
