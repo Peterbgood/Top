@@ -83,9 +83,6 @@
                 <span class="navbar-brand editable-title mb-0" id="listTitle" onclick="todoApp.editListTitle(this)">Wants</span>
             </div>
             <div class="d-flex align-items-center">
-                <button class="btn btn-outline-secondary me-2" onclick="todoApp.exportDatabase()">Export DB</button>
-                <input type="file" id="importDbInput" accept=".db" style="display: none;" onchange="todoApp.importDatabase(event)">
-                <button class="btn btn-outline-secondary me-2" onclick="document.getElementById('importDbInput').click()">Import DB</button>
                 <button class="navbar-toggler" type="button" data-bs-toggle="offcanvas" data-bs-target="#offcanvasMenu" aria-controls="offcanvasMenu">
                     <span class="navbar-toggler-icon"></span>
                 </button>
@@ -106,6 +103,7 @@
             </div>
         </div>
     </nav>
+    <input type="file" id="importDbInput" accept=".db" style="display: none;" onchange="todoApp.importDatabase(event)">
 
     <div class="container mt-4">
         <div class="input-group mb-3">
@@ -152,7 +150,6 @@
                 const SQL = await initSqlJs({
                     locateFile: file => `https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.8.0/${file}`
                 });
-                // Load database from localStorage if it exists
                 const savedDb = localStorage.getItem('todoDatabase');
                 if (savedDb) {
                     try {
@@ -248,7 +245,6 @@
                         });
                         const binaryArray = new Uint8Array(e.target.result);
                         const newDb = new SQL.Database(binaryArray);
-                        // Validate schema
                         const tables = newDb.exec("SELECT name FROM sqlite_master WHERE type='table'");
                         const tableNames = tables[0].values.map(row => row[0]);
                         if (!tableNames.includes('lists') || !tableNames.includes('items')) {
@@ -263,7 +259,6 @@
                         if (!hasListColumns || !hasItemColumns) {
                             throw new Error('Invalid table schema');
                         }
-                        // If schema is valid, replace current database
                         this.db = newDb;
                         this.saveDatabase();
                         this.currentList = 'Wants';
@@ -283,7 +278,7 @@
                         }
                         alert(message + ' Please ensure you are uploading a valid database file exported from this app.');
                     }
-                    event.target.value = ''; // Reset file input
+                    event.target.value = '';
                 };
                 reader.onerror = () => {
                     alert('Error reading file. Please try again.');
@@ -320,12 +315,10 @@
                 let text = input.value.trim();
                 if (!text) return;
 
-                // Get current list ID
                 const listResult = this.db.exec("SELECT id FROM lists WHERE name = ?", [this.currentList]);
                 if (!listResult.length) return;
                 const listId = listResult[0].values[0][0];
 
-                // Check item count (max 10)
                 const itemCount = this.db.exec("SELECT COUNT(*) FROM items WHERE list_id = ?", [listId])[0].values[0][0];
                 if (itemCount >= 10) {
                     alert('Maximum 10 items allowed per list.');
@@ -345,7 +338,6 @@
                 let listName = listNameInput.value.trim();
                 if (!listName) return;
 
-                // Check list count (max 20)
                 const listCount = this.db.exec("SELECT COUNT(*) FROM lists")[0].values[0][0];
                 if (listCount >= 20) {
                     alert('Maximum 20 lists allowed.');
@@ -436,7 +428,6 @@
                     const itemText = items[0].values[index][1];
                     if (confirm(`Are you sure you want to delete "${itemText}"?`)) {
                         this.db.run("DELETE FROM items WHERE id = ?", [itemId]);
-                        // Update positions
                         const remainingItems = this.db.exec("SELECT id FROM items WHERE list_id = ? ORDER BY position", [listId]);
                         remainingItems[0].values.forEach((row, i) => {
                             this.db.run("UPDATE items SET position = ? WHERE id = ?", [i + 1, row[0]]);
@@ -487,7 +478,6 @@
                     const itemId = items[0].values[index][0];
                     if (newText === '') {
                         this.db.run("DELETE FROM items WHERE id = ?", [itemId]);
-                        // Update positions
                         const remainingItems = this.db.exec("SELECT id FROM items WHERE list_id = ? ORDER BY position", [listId]);
                         remainingItems[0].values.forEach((row, i) => {
                             this.db.run("UPDATE items SET position = ? WHERE id = ?", [i + 1, row[0]]);
@@ -567,6 +557,25 @@
                         }
                         listMenu.appendChild(li);
                     });
+
+                    // Add Export and Import buttons at the bottom
+                    const exportLi = document.createElement('li');
+                    exportLi.className = 'nav-item';
+                    const exportButton = document.createElement('button');
+                    exportButton.className = 'btn btn-outline-secondary w-100 text-start';
+                    exportButton.innerText = 'Export DB';
+                    exportButton.addEventListener('click', () => this.exportDatabase());
+                    exportLi.appendChild(exportButton);
+                    listMenu.appendChild(exportLi);
+
+                    const importLi = document.createElement('li');
+                    importLi.className = 'nav-item';
+                    const importButton = document.createElement('button');
+                    importButton.className = 'btn btn-outline-secondary w-100 text-start';
+                    importButton.innerText = 'Import DB';
+                    importButton.addEventListener('click', () => document.getElementById('importDbInput').click());
+                    importLi.appendChild(importButton);
+                    listMenu.appendChild(importLi);
 
                     // Desktop drag-and-drop for lists
                     const draggables = listMenu.querySelectorAll('.draggable');
@@ -663,7 +672,6 @@
                     todoList.appendChild(itemDiv);
                 });
 
-                // Desktop drag-and-drop for items
                 const draggables = todoList.querySelectorAll('.draggable');
                 draggables.forEach(draggable => {
                     draggable.setAttribute('draggable', 'true');
@@ -687,7 +695,6 @@
                     });
                 });
 
-                // Mobile touch drag-and-drop for items
                 let touchStartY = 0;
                 let touchElement = null;
                 let touchIndex = null;
