@@ -99,7 +99,7 @@
                             <a class="nav-link" href="#" data-bs-toggle="modal" data-bs-target="#newListModal">New List</a>
                         </li>
                         <li class="nav-item">
-                            <a class="nav-link" href="#" onclick="todoApp.exportDatabase()">Export Database</a>
+                            <a class="nav-link" href="#" onclick="todoApp.exportDatabase()" ontouchstart="todoApp.exportDatabase()">Export Database</a>
                         </li>
                         <li class="nav-item">
                             <a class="nav-link" href="#" onclick="document.getElementById('importDbInput').click()">Import Database</a>
@@ -232,15 +232,46 @@
                     const data = this.db.export();
                     const blob = new Blob([data], { type: 'application/octet-stream' });
                     const url = URL.createObjectURL(blob);
-                    const a = document.createElement('a');
-                    a.href = url;
-                    a.download = 'todo_database.db';
-                    a.click();
-                    URL.revokeObjectURL(url);
+
+                    // Detect if the device is mobile
+                    const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+
+                    if (isMobile && navigator.share) {
+                        // Use Web Share API for mobile devices if available
+                        const file = new File([blob], 'todo_database.db', { type: 'application/octet-stream' });
+                        navigator.share({
+                            files: [file],
+                            title: 'Export To-Do Database',
+                            text: 'Download your to-do database file',
+                        }).then(() => {
+                            console.log('Database shared successfully');
+                            URL.revokeObjectURL(url);
+                        }).catch((error) => {
+                            console.error('Share failed:', error);
+                            // Fallback to download method
+                            this.fallbackDownload(url);
+                        });
+                    } else {
+                        // Fallback for desktop or non-share-supporting browsers
+                        this.fallbackDownload(url);
+                    }
                 } catch (error) {
                     console.error('Export failed:', error);
                     alert('Error exporting database. Please try again.');
                 }
+            }
+
+            fallbackDownload(url) {
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'todo_database.db';
+                // Append to DOM to ensure mobile browsers recognize the element
+                a.style.display = 'none';
+                document.body.appendChild(a);
+                a.click();
+                // Clean up
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
             }
 
             async importDatabase(event) {
@@ -538,7 +569,7 @@
                         <a class="nav-link" href="#" data-bs-toggle="modal" data-bs-target="#newListModal">New List</a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="#" onclick="todoApp.exportDatabase()">Export Database</a>
+                        <a class="nav-link" href="#" onclick="todoApp.exportDatabase()" ontouchstart="todoApp.exportDatabase()">Export Database</a>
                     </li>
                     <li class="nav-item">
                         <a class="nav-link" href="#" onclick="document.getElementById('importDbInput').click()">Import Database</a>
@@ -551,7 +582,7 @@
                             <a class="nav-link" href="#" data-bs-toggle="modal" data-bs-target="#newListModal">New List</a>
                         </li>
                         <li class="nav-item">
-                            <a class="nav-link" href="#" onclick="todoApp.exportDatabase()">Export Database</a>
+                            <a class="nav-link" href="#" onclick="todoApp.exportDatabase()" ontouchstart="todoApp.exportDatabase()">Export Database</a>
                         </li>
                         <li class="nav-item">
                             <a class="nav-link" href="#" onclick="document.getElementById('importDbInput').click()">Import Database</a>
