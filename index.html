@@ -108,7 +108,7 @@
             </div>
         </div>
     </nav>
-    <input type="file" id="importDbInput" accept=".db" style="display: none;" onchange="todoApp.importDatabase(event)">
+    <input type="file" id="importDbInput" accept=".json" style="display: none;" onchange="todoApp.importDatabase(event)">
 
     <div class="container mt-4">
         <div class="input-group mb-3">
@@ -138,158 +138,131 @@
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.8.0/sql-wasm.min.js"></script>
     <script>
         class TodoApp {
             constructor() {
                 this.currentList = 'Wants';
-                this.db = null;
+                this.data = {
+                    lists: [{ id: 1, name: 'Wants', position: 1 }],
+                    items: []
+                };
                 this.offcanvasElement = document.getElementById('offcanvasMenu');
-                this.initDatabase().then(() => {
-                    this.initEventListeners();
-                    this.loadList();
-                });
+                this.loadData();
+                this.initEventListeners();
+                this.loadList();
             }
 
-            async initDatabase() {
-                const SQL = await initSqlJs({
-                    locateFile: file => `https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.8.0/${file}`
-                });
-                const savedDb = localStorage.getItem('todoDatabase');
-                if (savedDb) {
+            loadData() {
+                const savedData = localStorage.getItem('todoData');
+                if (savedData) {
                     try {
-                        const binaryArray = Uint8Array.from(atob(savedDb), c => c.charCodeAt(0));
-                        this.db = new SQL.Database(binaryArray);
-                        if (!this.validateSchema()) {
-                            throw new Error('Invalid database schema');
+                        const parsedData = JSON.parse(savedData);
+                        if (this.validateData(parsedData)) {
+                            this.data = parsedData;
+                            if (!this.data.lists.some(list => list.name === 'Wants')) {
+                                this.data.lists.push({ id: this.getNextListId(), name: 'Wants', position: this.data.lists.length + 1 });
+                            }
+                        } else {
+                            this.resetData();
                         }
                     } catch (error) {
-                        console.error('Failed to load database from localStorage:', error);
-                        this.createNewDatabase(SQL);
+                        console.error('Failed to load data from localStorage:', error);
+                        this.resetData();
                     }
                 } else {
-                    this.createNewDatabase(SQL);
+                    this.resetData();
                 }
+                this.saveData();
             }
 
-            createNewDatabase(SQL) {
-                this.db = new SQL.Database();
-                this.db.run(`
-                    CREATE TABLE IF NOT EXISTS lists (
-                        id INTEGER PRIMARY KEY AUTOINCREMENT,
-                        name TEXT UNIQUE NOT NULL,
-                        position INTEGER NOT NULL
-                    );
-                    CREATE TABLE IF NOT EXISTS items (
-                        id INTEGER PRIMARY KEY AUTOINCREMENT,
-                        list_id INTEGER NOT NULL,
-                        text TEXT NOT NULL,
-                        position INTEGER NOT NULL,
-                        FOREIGN KEY (list_id) REFERENCES lists(id) ON DELETE CASCADE
-                    );
-                `);
-                this.db.run("INSERT OR IGNORE INTO lists (name, position) VALUES ('Wants', 1)");
-                this.saveDatabase();
+            validateData(data) {
+                if (!data || !Array.isArray(data.lists) || !Array.isArray(data.items)) return false;
+                const hasListProps = data.lists.every(list => 
+                    'id' in list && 'name' in list && 'position' in list
+                );
+                const hasItemProps = data.items.every(item => 
+                    'id' in item && 'list_id' in item && 'text' in item && 'position' in item
+                );
+                return hasListProps && hasItemProps;
             }
 
-            validateSchema() {
+            resetData() {
+                this.data = {
+                    lists: [{ id: 1, name: 'Wants', position: 1 }],
+                    items: []
+                };
+                this.currentList = 'Wants';
+            }
+
+            saveData() {
                 try {
-                    const tables = this.db.exec("SELECT name FROM sqlite_master WHERE type='table'");
-                    const tableNames = tables[0].values.map(row => row[0]);
-                    if (!tableNames.includes('lists') || !tableNames.includes('items')) {
-                        return false;
-                    }
-                    const listColumns = this.db.exec("PRAGMA table_info(lists)");
-                    const itemColumns = this.db.exec("PRAGMA table_info(items)");
-                    const expectedListColumns = ['id', 'name', 'position'];
-                    const expectedItemColumns = ['id', 'list_id', 'text', 'position'];
-                    const hasListColumns = listColumns[0].values.every(row => expectedListColumns.includes(row[1]));
-                    const hasItemColumns = itemColumns[0].values.every(row => expectedItemColumns.includes(row[1]));
-                    return hasListColumns && hasItemColumns;
+                    localStorage.setItem('todoData', JSON.stringify(this.data));
                 } catch (error) {
-                    console.error('Schema validation failed:', error);
-                    return false;
+                    console.error('Failed to save data to localStorage:', error);
+                    alert('Error saving data. Changes may not persist.');
                 }
             }
 
-            saveDatabase() {
-                try {
-                    const data = this.db.export();
-                    const binaryString = btoa(String.fromCharCode.apply(null, data));
-                    localStorage.setItem('todoDatabase', binaryString);
-                } catch (error) {
-                    console.error('Failed to save database to localStorage:', error);
-                    alert('Error saving database. Changes may not persist.');
-                }
+            getNextListId() {
+                return this.data.lists.length ? Math.max(...this.data.lists.map(l => l.id)) + 1 : 1;
+            }
+
+            getNextItemId() {
+                return this.data.items.length ? Math.max(...this.data.items.map(i => i.id)) + 1 : 1;
             }
 
             exportDatabase() {
                 try {
-                    const data = this.db.export();
-                    const blob = new Blob([data], { type: 'application/octet-stream' });
+                    const blob = new Blob([JSON.stringify(this.data, null, 2)], { type: 'application/json' });
                     const url = URL.createObjectURL(blob);
                     const a = document.createElement('a');
                     a.href = url;
-                    a.download = 'todo_database.db';
+                    a.download = 'todo_data.json';
                     a.click();
                     URL.revokeObjectURL(url);
                 } catch (error) {
                     console.error('Export failed:', error);
-                    alert('Error exporting database. Please try again.');
+                    alert('Error exporting data. Please try again.');
                 }
             }
 
-            async importDatabase(event) {
+            importDatabase(event) {
                 const file = event.target.files[0];
                 if (!file) return;
+                const fileExt = file.name.split('.').pop().toLowerCase();
+                if (fileExt !== 'json') {
+                    alert('Unsupported file type. Please upload a .json file.');
+                    event.target.value = '';
+                    return;
+                }
                 const reader = new FileReader();
-                reader.onload = async (e) => {
+                reader.onload = (e) => {
                     try {
-                        const SQL = await initSqlJs({
-                            locateFile: file => `https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.8.0/${file}`
-                        });
-                        const binaryArray = new Uint8Array(e.target.result);
-                        const newDb = new SQL.Database(binaryArray);
-                        const tables = newDb.exec("SELECT name FROM sqlite_master WHERE type='table'");
-                        const tableNames = tables[0].values.map(row => row[0]);
-                        if (!tableNames.includes('lists') || !tableNames.includes('items')) {
-                            throw new Error('Missing required tables (lists or items)');
+                        const parsedData = JSON.parse(e.target.result);
+                        if (!this.validateData(parsedData)) {
+                            throw new Error('Invalid JSON structure');
                         }
-                        const listColumns = newDb.exec("PRAGMA table_info(lists)");
-                        const itemColumns = newDb.exec("PRAGMA table_info(items)");
-                        const expectedListColumns = ['id', 'name', 'position'];
-                        const expectedItemColumns = ['id', 'list_id', 'text', 'position'];
-                        const hasListColumns = listColumns[0].values.every(row => expectedListColumns.includes(row[1]));
-                        const hasItemColumns = itemColumns[0].values.every(row => expectedItemColumns.includes(row[1]));
-                        if (!hasListColumns || !hasItemColumns) {
-                            throw new Error('Invalid table schema');
+                        this.data = parsedData;
+                        if (!this.data.lists.some(list => list.name === 'Wants')) {
+                            this.data.lists.push({ id: this.getNextListId(), name: 'Wants', position: this.data.lists.length + 1 });
                         }
-                        this.db = newDb;
-                        this.saveDatabase();
                         this.currentList = 'Wants';
+                        this.saveData();
                         this.updateTitle();
                         this.renderList();
                         this.renderMenu();
-                        alert('Database imported successfully.');
+                        alert('JSON data imported successfully.');
                     } catch (error) {
-                        console.error('Import failed:', error);
-                        let message = 'Error importing database: ';
-                        if (error.message.includes('Missing required tables')) {
-                            message += 'The file does not contain the required tables (lists or items).';
-                        } else if (error.message.includes('Invalid table schema')) {
-                            message += 'The file has an incompatible table structure.';
-                        } else {
-                            message += 'The file is invalid or corrupted.';
-                        }
-                        alert(message + ' Please ensure you are uploading a valid database file exported from this app.');
+                        console.error('JSON import failed:', error);
+                        alert('Error importing JSON: The file has an incompatible structure or is corrupted. Please ensure it is a valid JSON file exported from this app.');
                     }
                     event.target.value = '';
                 };
                 reader.onerror = () => {
-                    alert('Error reading file. Please try again.');
+                    alert('Error reading JSON file. Please try again.');
                     event.target.value = '';
                 };
-                reader.readAsArrayBuffer(file);
+                reader.readAsText(file);
             }
 
             initEventListeners() {
@@ -320,20 +293,24 @@
                 let text = input.value.trim();
                 if (!text) return;
 
-                const listResult = this.db.exec("SELECT id FROM lists WHERE name = ?", [this.currentList]);
-                if (!listResult.length) return;
-                const listId = listResult[0].values[0][0];
+                const list = this.data.lists.find(l => l.name === this.currentList);
+                if (!list) return;
 
-                const itemCount = this.db.exec("SELECT COUNT(*) FROM items WHERE list_id = ?", [listId])[0].values[0][0];
-                if (itemCount >= 10) {
+                const itemsInList = this.data.items.filter(i => i.list_id === list.id);
+                if (itemsInList.length >= 10) {
                     alert('Maximum 10 items allowed per list.');
                     return;
                 }
 
                 text = this.capitalizeWords(text);
-                const position = itemCount + 1;
-                this.db.run("INSERT INTO items (list_id, text, position) VALUES (?, ?, ?)", [listId, text, position]);
-                this.saveDatabase();
+                const position = itemsInList.length + 1;
+                this.data.items.push({
+                    id: this.getNextItemId(),
+                    list_id: list.id,
+                    text,
+                    position
+                });
+                this.saveData();
                 this.renderList();
                 input.value = '';
             }
@@ -343,29 +320,30 @@
                 let listName = listNameInput.value.trim();
                 if (!listName) return;
 
-                const listCount = this.db.exec("SELECT COUNT(*) FROM lists")[0].values[0][0];
-                if (listCount >= 20) {
+                if (this.data.lists.length >= 20) {
                     alert('Maximum 20 lists allowed.');
                     return;
                 }
 
                 listName = this.capitalizeWords(listName);
-                try {
-                    const position = listCount + 1;
-                    this.db.run("INSERT INTO lists (name, position) VALUES (?, ?)", [listName, position]);
-                    this.currentList = listName;
-                    this.saveDatabase();
-                    this.updateTitle();
-                    this.renderList();
-                    this.renderMenu();
-                    listNameInput.value = '';
-                    bootstrap.Modal.getInstance(document.getElementById('newListModal')).hide();
-                    this.closeOffcanvas();
-                } catch (e) {
-                    if (e.message.includes('UNIQUE constraint failed')) {
-                        alert('List name already exists.');
-                    }
+                if (this.data.lists.some(l => l.name === listName)) {
+                    alert('List name already exists.');
+                    return;
                 }
+
+                this.data.lists.push({
+                    id: this.getNextListId(),
+                    name: listName,
+                    position: this.data.lists.length + 1
+                });
+                this.currentList = listName;
+                this.saveData();
+                this.updateTitle();
+                this.renderList();
+                this.renderMenu();
+                listNameInput.value = '';
+                bootstrap.Modal.getInstance(document.getElementById('newListModal')).hide();
+                this.closeOffcanvas();
             }
 
             editListTitle(element) {
@@ -383,17 +361,19 @@
                         return;
                     }
                     newName = this.capitalizeWords(newName);
-                    try {
-                        this.db.run("UPDATE lists SET name = ? WHERE name = ?", [newName, this.currentList]);
+                    if (this.data.lists.some(l => l.name === newName)) {
+                        alert('List name already exists.');
+                        element.innerText = this.currentList;
+                        element.contentEditable = false;
+                        return;
+                    }
+                    const list = this.data.lists.find(l => l.name === this.currentList);
+                    if (list) {
+                        list.name = newName;
                         this.currentList = newName;
-                        this.saveDatabase();
+                        this.saveData();
                         this.updateTitle();
                         this.renderMenu();
-                    } catch (e) {
-                        if (e.message.includes('UNIQUE constraint failed')) {
-                            alert('List name already exists.');
-                            element.innerText = this.currentList;
-                        }
                     }
                     element.contentEditable = false;
                 }, { once: true });
@@ -411,41 +391,41 @@
                     return;
                 }
                 if (confirm(`Are you sure you want to delete the "${listName}" list?`)) {
-                    this.db.run("DELETE FROM lists WHERE name = ?", [listName]);
-                    if (this.currentList === listName) {
-                        this.currentList = 'Wants';
+                    const list = this.data.lists.find(l => l.name === listName);
+                    if (list) {
+                        this.data.lists = this.data.lists.filter(l => l.name !== listName);
+                        this.data.items = this.data.items.filter(i => i.list_id !== list.id);
+                        this.data.lists.forEach((list, i) => list.position = i + 1);
+                        if (this.currentList === listName) {
+                            this.currentList = 'Wants';
+                        }
+                        this.saveData();
+                        this.updateTitle();
+                        this.renderList();
+                        this.renderMenu();
+                        this.closeOffcanvas();
                     }
-                    this.saveDatabase();
-                    this.updateTitle();
-                    this.renderList();
-                    this.renderMenu();
-                    this.closeOffcanvas();
                 }
             }
 
             deleteItem(index) {
-                const listResult = this.db.exec("SELECT id FROM lists WHERE name = ?", [this.currentList]);
-                if (!listResult.length) return;
-                const listId = listResult[0].values[0][0];
-                const items = this.db.exec("SELECT id, text FROM items WHERE list_id = ? ORDER BY position", [listId]);
-                if (items.length && index < items[0].values.length) {
-                    const itemId = items[0].values[index][0];
-                    const itemText = items[0].values[index][1];
-                    if (confirm(`Are you sure you want to delete "${itemText}"?`)) {
-                        this.db.run("DELETE FROM items WHERE id = ?", [itemId]);
-                        const remainingItems = this.db.exec("SELECT id FROM items WHERE list_id = ? ORDER BY position", [listId]);
-                        remainingItems[0].values.forEach((row, i) => {
-                            this.db.run("UPDATE items SET position = ? WHERE id = ?", [i + 1, row[0]]);
-                        });
-                        this.saveDatabase();
+                const list = this.data.lists.find(l => l.name === this.currentList);
+                if (!list) return;
+                const items = this.data.items.filter(i => i.list_id === list.id).sort((a, b) => a.position - b.position);
+                if (index < items.length) {
+                    const item = items[index];
+                    if (confirm(`Are you sure you want to delete "${item.text}"?`)) {
+                        this.data.items = this.data.items.filter(i => i.id !== item.id);
+                        const remainingItems = this.data.items.filter(i => i.list_id === list.id).sort((a, b) => a.position - b.position);
+                        remainingItems.forEach((item, i) => item.position = i + 1);
+                        this.saveData();
                         this.renderList();
                     }
                 }
             }
 
             switchList(listName) {
-                const listResult = this.db.exec("SELECT name FROM lists WHERE name = ?", [listName]);
-                if (listResult.length) {
+                if (this.data.lists.some(l => l.name === listName)) {
                     this.currentList = listName;
                     this.updateTitle();
                     this.renderList();
@@ -454,19 +434,14 @@
             }
 
             reorderItems(oldIndex, newIndex) {
-                const listResult = this.db.exec("SELECT id FROM lists WHERE name = ?", [this.currentList]);
-                if (!listResult.length) return;
-                const listId = listResult[0].values[0][0];
-                const items = this.db.exec("SELECT id FROM items WHERE list_id = ? ORDER BY position", [listId]);
-                if (!items.length) return;
-                const itemIds = items[0].values.map(row => row[0]);
-                if (oldIndex >= itemIds.length || newIndex >= itemIds.length) return;
-                const [movedItem] = itemIds.splice(oldIndex, 1);
-                itemIds.splice(newIndex, 0, movedItem);
-                itemIds.forEach((id, i) => {
-                    this.db.run("UPDATE items SET position = ? WHERE id = ?", [i + 1, id]);
-                });
-                this.saveDatabase();
+                const list = this.data.lists.find(l => l.name === this.currentList);
+                if (!list) return;
+                const items = this.data.items.filter(i => i.list_id === list.id).sort((a, b) => a.position - b.position);
+                if (oldIndex >= items.length || newIndex >= items.length) return;
+                const [movedItem] = items.splice(oldIndex, 1);
+                items.splice(newIndex, 0, movedItem);
+                items.forEach((item, i) => item.position = i + 1);
+                this.saveData();
                 this.renderList();
             }
 
@@ -475,23 +450,20 @@
                 element.focus();
                 element.addEventListener('blur', () => {
                     let newText = element.innerText.trim();
-                    const listResult = this.db.exec("SELECT id FROM lists WHERE name = ?", [this.currentList]);
-                    if (!listResult.length) return;
-                    const listId = listResult[0].values[0][0];
-                    const items = this.db.exec("SELECT id FROM items WHERE list_id = ? ORDER BY position", [listId]);
-                    if (!items.length || index >= items[0].values.length) return;
-                    const itemId = items[0].values[index][0];
+                    const list = this.data.lists.find(l => l.name === this.currentList);
+                    if (!list) return;
+                    const items = this.data.items.filter(i => i.list_id === list.id).sort((a, b) => a.position - b.position);
+                    if (index >= items.length) return;
+                    const item = items[index];
                     if (newText === '') {
-                        this.db.run("DELETE FROM items WHERE id = ?", [itemId]);
-                        const remainingItems = this.db.exec("SELECT id FROM items WHERE list_id = ? ORDER BY position", [listId]);
-                        remainingItems[0].values.forEach((row, i) => {
-                            this.db.run("UPDATE items SET position = ? WHERE id = ?", [i + 1, row[0]]);
-                        });
+                        this.data.items = this.data.items.filter(i => i.id !== item.id);
+                        const remainingItems = this.data.items.filter(i => i.list_id === list.id).sort((a, b) => a.position - b.position);
+                        remainingItems.forEach((item, i) => item.position = i + 1);
                     } else {
                         newText = this.capitalizeWords(newText);
-                        this.db.run("UPDATE items SET text = ? WHERE id = ?", [newText, itemId]);
+                        item.text = newText;
                     }
-                    this.saveDatabase();
+                    this.saveData();
                     this.renderList();
                 }, { once: true });
                 element.addEventListener('keypress', (e) => {
@@ -503,16 +475,13 @@
             }
 
             reorderLists(oldIndex, newIndex) {
-                const lists = this.db.exec("SELECT id FROM lists ORDER BY position");
-                if (!lists.length) return;
-                const listIds = lists[0].values.map(row => row[0]);
-                if (oldIndex >= listIds.length || newIndex >= listIds.length) return;
-                const [movedList] = listIds.splice(oldIndex, 1);
-                listIds.splice(newIndex, 0, movedList);
-                listIds.forEach((id, i) => {
-                    this.db.run("UPDATE lists SET position = ? WHERE id = ?", [i + 1, id]);
-                });
-                this.saveDatabase();
+                const lists = [...this.data.lists].sort((a, b) => a.position - b.position);
+                if (oldIndex >= lists.length || newIndex >= lists.length) return;
+                const [movedList] = lists.splice(oldIndex, 1);
+                lists.splice(newIndex, 0, movedList);
+                lists.forEach((list, i) => list.position = i + 1);
+                this.data.lists = lists;
+                this.saveData();
                 this.renderMenu();
             }
 
@@ -534,29 +503,30 @@
                             <a class="nav-link" href="#" data-bs-toggle="modal" data-bs-target="#newListModal">New List</a>
                         </li>
                     `;
-                    const lists = this.db.exec("SELECT name, position FROM lists WHERE name LIKE ? ORDER BY position", [`%${filter}%`]);
-                    lists[0].values.forEach((row, index) => {
-                        const listName = row[0];
+                    const lists = this.data.lists
+                        .filter(l => l.name.toLowerCase().includes(filter.toLowerCase()))
+                        .sort((a, b) => a.position - b.position);
+                    lists.forEach((list, index) => {
                         const li = document.createElement('li');
                         li.className = 'nav-item d-flex align-items-center draggable';
                         li.setAttribute('data-index', index);
                         const switchLink = document.createElement('a');
                         switchLink.className = 'nav-link';
                         switchLink.href = '#';
-                        switchLink.innerText = listName;
+                        switchLink.innerText = list.name;
                         switchLink.addEventListener('click', (e) => {
                             e.preventDefault();
-                            this.switchList(listName);
+                            this.switchList(list.name);
                         });
                         li.appendChild(switchLink);
-                        if (listName !== 'Wants') {
+                        if (list.name !== 'Wants') {
                             const deleteLink = document.createElement('a');
                             deleteLink.className = 'nav-link delete-btn text-danger';
                             deleteLink.href = '#';
                             deleteLink.innerText = 'Delete';
                             deleteLink.addEventListener('click', (e) => {
                                 e.preventDefault();
-                                this.deleteList(listName);
+                                this.deleteList(list.name);
                             });
                             li.appendChild(deleteLink);
                         }
@@ -631,20 +601,19 @@
             renderList() {
                 const todoList = document.getElementById('todoList');
                 todoList.innerHTML = '';
-                const listResult = this.db.exec("SELECT id FROM lists WHERE name = ?", [this.currentList]);
-                if (!listResult.length) return;
-                const listId = listResult[0].values[0][0];
-                const items = this.db.exec("SELECT id, text FROM items WHERE list_id = ? ORDER BY position", [listId]);
-                items[0]?.values.forEach((row, index) => {
-                    const itemId = row[0];
-                    const itemText = row[1];
+                const list = this.data.lists.find(l => l.name === this.currentList);
+                if (!list) return;
+                const items = this.data.items
+                    .filter(i => i.list_id === list.id)
+                    .sort((a, b) => a.position - b.position);
+                items.forEach((item, index) => {
                     const itemDiv = document.createElement('div');
                     itemDiv.className = `list-item draggable ${index < 3 ? 'top-tier' : index < 5 ? 'mid-tier' : 'bottom-tier'}`;
                     itemDiv.setAttribute('data-index', index);
                     itemDiv.innerHTML = `
                         <div class="list-item-content">
                             <span class="item-number">${index + 1}.</span>
-                            <div class="editable flex-grow-1" onclick="todoApp.editItem(${index}, this)">${itemText}</div>
+                            <div class="editable flex-grow-1" onclick="todoApp.editItem(${index}, this)">${item.text}</div>
                             <a href="#" class="delete-item-btn text-danger" onclick="todoApp.deleteItem(${index})">
                                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-trash" viewBox="0 0 16 16">
                                     <path d="M5.5 5.5A.5.5 0 0 1 6 5h4a.5.5 0 0 1 .5.5v7a.5.5 0 0 1-.5.5H6a.5.5 0 0 1-.5-.5v-7zm-1-.5a.5.5 0 0 1 .5-.5h6a.5.5 0 0 1 .5.5v8a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-8z"/>
@@ -656,19 +625,18 @@
                     todoList.appendChild(itemDiv);
                 });
 
-                // Add Export and Import buttons at the bottom of the Wants list
                 if (this.currentList === 'Wants') {
                     const buttonContainer = document.createElement('div');
                     buttonContainer.className = 'action-buttons';
                     const exportButton = document.createElement('button');
                     exportButton.className = 'btn btn-outline-secondary';
-                    exportButton.innerText = 'Export DB';
+                    exportButton.innerText = 'Export JSON';
                     exportButton.addEventListener('click', () => this.exportDatabase());
                     buttonContainer.appendChild(exportButton);
 
                     const importButton = document.createElement('button');
                     importButton.className = 'btn btn-outline-secondary';
-                    importButton.innerText = 'Import DB';
+                    importButton.innerText = 'Import JSON';
                     importButton.addEventListener('click', () => document.getElementById('importDbInput').click());
                     buttonContainer.appendChild(importButton);
 
@@ -687,9 +655,7 @@
                     });
                     draggable.addEventListener('dragover', (e) => {
                         e.preventDefault();
-                   
-
- });
+                    });
                     draggable.addEventListener('drop', (e) => {
                         e.preventDefault();
                         const fromIndex = parseInt(e.dataTransfer.getData('text/plain'));
