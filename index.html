@@ -13,7 +13,7 @@
         }
         .editable:focus, .editable-title:focus {
             outline: none;
-            background: #f0f2f5;
+            background: #f8f9fa;
         }
         .nav-link.delete-btn, .delete-item-btn {
             margin-left: auto;
@@ -25,26 +25,22 @@
         .editable-title {
             cursor: pointer;
             padding: 0.375rem 0.75rem;
-            font-size: 1.5rem;
-            font-weight: 600;
         }
         .top-tier {
-            background: linear-gradient(135deg, #28a745, #34c759);
-            color: white !important;
+            color: #198754 !important;
         }
         .mid-tier {
-            background: linear-gradient(135deg, #0d6efd, #5090ff);
-            color: white !important;
+            color: #0d6efd !important;
         }
         .bottom-tier {
-            background: linear-gradient(135deg, #6c757d, #adb5bd);
-            color: white !important;
+            color: #000000 !important;
         }
         .offcanvas-body {
             overflow-y: auto;
             -webkit-overflow-scrolling: touch;
             max-height: 80vh;
             overscroll-behavior-y: contain;
+            -ms-overflow-style: auto;
         }
         .list-menu {
             max-height: none;
@@ -56,28 +52,19 @@
             position: relative;
             display: flex;
             align-items: center;
-            margin: 0.5rem 0;
-            border-radius: 12px;
-            overflow: hidden;
-            transition: transform 0.3s ease, box-shadow 0.3s ease;
+            padding-top: 10px;
         }
         .nav-item.draggable.dragging, .list-item.draggable.dragging {
-            opacity: 0.7;
-            transform: scale(0.95);
-            box-shadow: 0 8px 16px rgba(0, 0, 0, 0.2);
+            opacity: 0.5;
+            background-color: #f0f0f0;
         }
         .nav-item.draggable::before, .list-item.draggable::before {
             content: '☰';
-            margin: 0 1rem;
+            margin-right: 0.5rem;
             font-size: 1.2rem;
-            color: #fff;
         }
         .list-item {
-            padding: 1rem;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-            border-radius: 12px;
-            margin-bottom: 1rem;
-            transition: transform 0.5s cubic-bezier(0.68, -0.55, 0.27, 1.55);
+            margin-bottom: 0.5rem;
         }
         .list-item-content {
             display: flex;
@@ -86,32 +73,15 @@
         }
         .delete-item-btn {
             flex-shrink: 0;
-            color: #fff !important;
         }
         .action-buttons {
             margin-top: 1rem;
             display: flex;
             gap: 0.5rem;
         }
-        /* Slot-machine-like effect for mobile */
-        @media (max-width: 768px) {
-            .list-item.draggable {
-                transition: transform 0.5s cubic-bezier(0.25, 0.46, 0.45, 0.94);
-            }
-            .list-item.draggable.dragging {
-                transform: translateY(10px) scale(0.98);
-                box-shadow: 0 12px 24px rgba(0, 0, 0, 0.3);
-            }
-            .list-item.draggable::before {
-                content: '⋮⋮';
-                font-size: 1.5rem;
-                padding: 0 0.5rem;
-            }
-        }
     </style>
 </head>
 <body>
-    <!-- The rest of the HTML and JavaScript remains unchanged -->
     <nav class="navbar navbar-light bg-light">
         <div class="container-fluid">
             <div class="d-flex align-items-center">
@@ -169,7 +139,6 @@
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
-        // JavaScript remains unchanged
         class TodoApp {
             constructor() {
                 this.currentList = 'Wants';
@@ -182,8 +151,567 @@
                 this.initEventListeners();
                 this.loadList();
             }
-            // ... rest of the JavaScript code remains as provided
+
+            loadData() {
+                const savedData = localStorage.getItem('todoData');
+                if (savedData) {
+                    try {
+                        const parsedData = JSON.parse(savedData);
+                        if (this.validateData(parsedData)) {
+                            this.data = parsedData;
+                            if (!this.data.lists.some(list => list.name === 'Wants')) {
+                                this.data.lists.push({ id: this.getNextListId(), name: 'Wants', position: this.data.lists.length + 1 });
+                            }
+                        } else {
+                            this.resetData();
+                        }
+                    } catch (error) {
+                        console.error('Failed to load data from localStorage:', error);
+                        this.resetData();
+                    }
+                } else {
+                    this.resetData();
+                }
+                this.saveData();
+            }
+
+            validateData(data) {
+                if (!data || !Array.isArray(data.lists) || !Array.isArray(data.items)) return false;
+                const hasListProps = data.lists.every(list => 
+                    'id' in list && 'name' in list && 'position' in list
+                );
+                const hasItemProps = data.items.every(item => 
+                    'id' in item && 'list_id' in item && 'text' in item && 'position' in item
+                );
+                return hasListProps && hasItemProps;
+            }
+
+            resetData() {
+                this.data = {
+                    lists: [{ id: 1, name: 'Wants', position: 1 }],
+                    items: []
+                };
+                this.currentList = 'Wants';
+            }
+
+            saveData() {
+                try {
+                    localStorage.setItem('todoData', JSON.stringify(this.data));
+                } catch (error) {
+                    console.error('Failed to save data to localStorage:', error);
+                    alert('Error saving data. Changes may not persist.');
+                }
+            }
+
+            getNextListId() {
+                return this.data.lists.length ? Math.max(...this.data.lists.map(l => l.id)) + 1 : 1;
+            }
+
+            getNextItemId() {
+                return this.data.items.length ? Math.max(...this.data.items.map(i => i.id)) + 1 : 1;
+            }
+
+            exportDatabase() {
+                try {
+                    const blob = new Blob([JSON.stringify(this.data, null, 2)], { type: 'application/json' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = 'todo_data.json';
+                    a.click();
+                    URL.revokeObjectURL(url);
+                } catch (error) {
+                    console.error('Export failed:', error);
+                    alert('Error exporting data. Please try again.');
+                }
+            }
+
+            importDatabase(event) {
+                const file = event.target.files[0];
+                if (!file) return;
+                const fileExt = file.name.split('.').pop().toLowerCase();
+                if (fileExt !== 'json') {
+                    alert('Unsupported file type. Please upload a .json file.');
+                    event.target.value = '';
+                    return;
+                }
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    try {
+                        const parsedData = JSON.parse(e.target.result);
+                        if (!this.validateData(parsedData)) {
+                            throw new Error('Invalid JSON structure');
+                        }
+                        this.data = parsedData;
+                        if (!this.data.lists.some(list => list.name === 'Wants')) {
+                            this.data.lists.push({ id: this.getNextListId(), name: 'Wants', position: this.data.lists.length + 1 });
+                        }
+                        this.currentList = 'Wants';
+                        this.saveData();
+                        this.updateTitle();
+                        this.renderList();
+                        this.renderMenu();
+                        alert('JSON data imported successfully.');
+                    } catch (error) {
+                        console.error('JSON import failed:', error);
+                        alert('Error importing JSON: The file has an incompatible structure or is corrupted. Please ensure it is a valid JSON file exported from this app.');
+                    }
+                    event.target.value = '';
+                };
+                reader.onerror = () => {
+                    alert('Error reading JSON file. Please try again.');
+                    event.target.value = '';
+                };
+                reader.readAsText(file);
+            }
+
+            initEventListeners() {
+                document.getElementById('addItemBtn').addEventListener('click', () => this.addItem());
+                document.getElementById('createListBtn').addEventListener('click', () => this.createNewList());
+                document.getElementById('newItemInput').addEventListener('keypress', (e) => {
+                    if (e.key === 'Enter') this.addItem();
+                });
+                document.getElementById('newListName').addEventListener('keypress', (e) => {
+                    if (e.key === 'Enter') this.createNewList();
+                });
+            }
+
+            capitalizeWords(str) {
+                return str
+                    .split(' ')
+                    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+                    .join(' ');
+            }
+
+            closeOffcanvas() {
+                const offcanvas = bootstrap.Offcanvas.getInstance(this.offcanvasElement) || new bootstrap.Offcanvas(this.offcanvasElement);
+                offcanvas.hide();
+            }
+
+            addItem() {
+                const input = document.getElementById('newItemInput');
+                let text = input.value.trim();
+                if (!text) return;
+
+                const list = this.data.lists.find(l => l.name === this.currentList);
+                if (!list) return;
+
+                const itemsInList = this.data.items.filter(i => i.list_id === list.id);
+                if (itemsInList.length >= 10) {
+                    alert('Maximum 10 items allowed per list.');
+                    return;
+                }
+
+                text = this.capitalizeWords(text);
+                const position = itemsInList.length + 1;
+                this.data.items.push({
+                    id: this.getNextItemId(),
+                    list_id: list.id,
+                    text,
+                    position
+                });
+                this.saveData();
+                this.renderList();
+                input.value = '';
+            }
+
+            createNewList() {
+                const listNameInput = document.getElementById('newListName');
+                let listName = listNameInput.value.trim();
+                if (!listName) return;
+
+                if (this.data.lists.length >= 20) {
+                    alert('Maximum 20 lists allowed.');
+                    return;
+                }
+
+                listName = this.capitalizeWords(listName);
+                if (this.data.lists.some(l => l.name === listName)) {
+                    alert('List name already exists.');
+                    return;
+                }
+
+                this.data.lists.push({
+                    id: this.getNextListId(),
+                    name: listName,
+                    position: this.data.lists.length + 1
+                });
+                this.currentList = listName;
+                this.saveData();
+                this.updateTitle();
+                this.renderList();
+                this.renderMenu();
+                listNameInput.value = '';
+                bootstrap.Modal.getInstance(document.getElementById('newListModal')).hide();
+                this.closeOffcanvas();
+            }
+
+            editListTitle(element) {
+                if (this.currentList === 'Wants') {
+                    alert('Cannot rename the default "Wants" list.');
+                    return;
+                }
+                element.contentEditable = true;
+                element.focus();
+                element.addEventListener('blur', () => {
+                    let newName = element.innerText.trim();
+                    if (!newName) {
+                        element.innerText = this.currentList;
+                        element.contentEditable = false;
+                        return;
+                    }
+                    newName = this.capitalizeWords(newName);
+                    if (this.data.lists.some(l => l.name === newName)) {
+                        alert('List name already exists.');
+                        element.innerText = this.currentList;
+                        element.contentEditable = false;
+                        return;
+                    }
+                    const list = this.data.lists.find(l => l.name === this.currentList);
+                    if (list) {
+                        list.name = newName;
+                        this.currentList = newName;
+                        this.saveData();
+                        this.updateTitle();
+                        this.renderMenu();
+                    }
+                    element.contentEditable = false;
+                }, { once: true });
+                element.addEventListener('keypress', (e) => {
+                    if (e.key === 'Enter') {
+                        e.preventDefault();
+                        element.blur();
+                    }
+                });
+            }
+
+            deleteList(listName) {
+                if (listName === 'Wants') {
+                    alert('Cannot delete the default "Wants" list.');
+                    return;
+                }
+                if (confirm(`Are you sure you want to delete the "${listName}" list?`)) {
+                    const list = this.data.lists.find(l => l.name === listName);
+                    if (list) {
+                        this.data.lists = this.data.lists.filter(l => l.name !== listName);
+                        this.data.items = this.data.items.filter(i => i.list_id !== list.id);
+                        this.data.lists.forEach((list, i) => list.position = i + 1);
+                        if (this.currentList === listName) {
+                            this.currentList = 'Wants';
+                        }
+                        this.saveData();
+                        this.updateTitle();
+                        this.renderList();
+                        this.renderMenu();
+                        this.closeOffcanvas();
+                    }
+                }
+            }
+
+            deleteItem(index) {
+                const list = this.data.lists.find(l => l.name === this.currentList);
+                if (!list) return;
+                const items = this.data.items.filter(i => i.list_id === list.id).sort((a, b) => a.position - b.position);
+                if (index < items.length) {
+                    const item = items[index];
+                    if (confirm(`Are you sure you want to delete "${item.text}"?`)) {
+                        this.data.items = this.data.items.filter(i => i.id !== item.id);
+                        const remainingItems = this.data.items.filter(i => i.list_id === list.id).sort((a, b) => a.position - b.position);
+                        remainingItems.forEach((item, i) => item.position = i + 1);
+                        this.saveData();
+                        this.renderList();
+                    }
+                }
+            }
+
+            switchList(listName) {
+                if (this.data.lists.some(l => l.name === listName)) {
+                    this.currentList = listName;
+                    this.updateTitle();
+                    this.renderList();
+                    this.closeOffcanvas();
+                }
+            }
+
+            reorderItems(oldIndex, newIndex) {
+                const list = this.data.lists.find(l => l.name === this.currentList);
+                if (!list) return;
+                const items = this.data.items.filter(i => i.list_id === list.id).sort((a, b) => a.position - b.position);
+                if (oldIndex >= items.length || newIndex >= items.length) return;
+                const [movedItem] = items.splice(oldIndex, 1);
+                items.splice(newIndex, 0, movedItem);
+                items.forEach((item, i) => item.position = i + 1);
+                this.saveData();
+                this.renderList();
+            }
+
+            editItem(index, element) {
+                element.contentEditable = true;
+                element.focus();
+                element.addEventListener('blur', () => {
+                    let newText = element.innerText.trim();
+                    const list = this.data.lists.find(l => l.name === this.currentList);
+                    if (!list) return;
+                    const items = this.data.items.filter(i => i.list_id === list.id).sort((a, b) => a.position - b.position);
+                    if (index >= items.length) return;
+                    const item = items[index];
+                    if (newText === '') {
+                        this.data.items = this.data.items.filter(i => i.id !== item.id);
+                        const remainingItems = this.data.items.filter(i => i.list_id === list.id).sort((a, b) => a.position - b.position);
+                        remainingItems.forEach((item, i) => item.position = i + 1);
+                    } else {
+                        newText = this.capitalizeWords(newText);
+                        item.text = newText;
+                    }
+                    this.saveData();
+                    this.renderList();
+                }, { once: true });
+                element.addEventListener('keypress', (e) => {
+                    if (e.key === 'Enter') {
+                        e.preventDefault();
+                        element.blur();
+                    }
+                });
+            }
+
+            reorderLists(oldIndex, newIndex) {
+                const lists = [...this.data.lists].sort((a, b) => a.position - b.position);
+                if (oldIndex >= lists.length || newIndex >= lists.length) return;
+                const [movedList] = lists.splice(oldIndex, 1);
+                lists.splice(newIndex, 0, movedList);
+                lists.forEach((list, i) => list.position = i + 1);
+                this.data.lists = lists;
+                this.saveData();
+                this.renderMenu();
+            }
+
+            updateTitle() {
+                document.getElementById('listTitle').innerText = this.currentList;
+            }
+
+            renderMenu() {
+                const listMenu = document.getElementById('listMenu');
+                listMenu.innerHTML = `
+                    <li class="nav-item">
+                        <a class="nav-link" href="#" data-bs-toggle="modal" data-bs-target="#newListModal">New List</a>
+                    </li>
+                `;
+                const searchInput = document.getElementById('listSearch');
+                const renderFilteredLists = (filter = '') => {
+                    listMenu.innerHTML = `
+                        <li class="nav-item">
+                            <a class="nav-link" href="#" data-bs-toggle="modal" data-bs-target="#newListModal">New List</a>
+                        </li>
+                    `;
+                    const lists = this.data.lists
+                        .filter(l => l.name.toLowerCase().includes(filter.toLowerCase()))
+                        .sort((a, b) => a.position - b.position);
+                    lists.forEach((list, index) => {
+                        const li = document.createElement('li');
+                        li.className = 'nav-item d-flex align-items-center draggable';
+                        li.setAttribute('data-index', index);
+                        const switchLink = document.createElement('a');
+                        switchLink.className = 'nav-link';
+                        switchLink.href = '#';
+                        switchLink.innerText = list.name;
+                        switchLink.addEventListener('click', (e) => {
+                            e.preventDefault();
+                            this.switchList(list.name);
+                        });
+                        li.appendChild(switchLink);
+                        if (list.name !== 'Wants') {
+                            const deleteLink = document.createElement('a');
+                            deleteLink.className = 'nav-link delete-btn text-danger';
+                            deleteLink.href = '#';
+                            deleteLink.innerText = 'Delete';
+                            deleteLink.addEventListener('click', (e) => {
+                                e.preventDefault();
+                                this.deleteList(list.name);
+                            });
+                            li.appendChild(deleteLink);
+                        }
+                        listMenu.appendChild(li);
+                    });
+
+                    const draggables = listMenu.querySelectorAll('.draggable');
+                    draggables.forEach(draggable => {
+                        draggable.setAttribute('draggable', 'true');
+                        draggable.addEventListener('dragstart', (e) => {
+                            draggable.classList.add('dragging');
+                            e.dataTransfer.setData('text/plain', draggable.dataset.index);
+                        });
+                        draggable.addEventListener('dragend', () => {
+                            draggable.classList.remove('dragging');
+                        });
+                        draggable.addEventListener('dragover', (e) => {
+                            e.preventDefault();
+                        });
+                        draggable.addEventListener('drop', (e) => {
+                            e.preventDefault();
+                            const fromIndex = parseInt(e.dataTransfer.getData('text/plain'));
+                            const toIndex = parseInt(draggable.dataset.index);
+                            if (fromIndex !== toIndex) {
+                                this.reorderLists(fromIndex, toIndex);
+                            }
+                        });
+                    });
+
+                    let touchStartY = 0;
+                    let touchElement = null;
+                    let touchIndex = null;
+
+                    draggables.forEach(draggable => {
+                        draggable.addEventListener('touchstart', (e) => {
+                            touchElement = draggable;
+                            touchIndex = parseInt(draggable.dataset.index);
+                            touchStartY = e.touches[0].clientY;
+                            draggable.classList.add('dragging');
+                        }, { passive: true });
+
+                        draggable.addEventListener('touchmove', (e) => {
+                            e.preventDefault();
+                            const touchY = e.touches[0].clientY;
+                            const elements = [...listMenu.querySelectorAll('.draggable')];
+                            const currentElement = elements.find(el => {
+                                const rect = el.getBoundingClientRect();
+                                return touchY >= rect.top && touchY <= rect.bottom;
+                            });
+                            if (currentElement && currentElement !== touchElement) {
+                                const newIndex = parseInt(currentElement.dataset.index);
+                                if (newIndex !== touchIndex) {
+                                    this.reorderLists(touchIndex, newIndex);
+                                    touchIndex = newIndex;
+                                    touchElement = currentElement;
+                                }
+                            }
+                        }, { passive: false });
+
+                        draggable.addEventListener('touchend', () => {
+                            draggable.classList.remove('dragging');
+                            touchElement = null;
+                            touchIndex = null;
+                        });
+                    });
+                };
+
+                renderFilteredLists();
+                searchInput.addEventListener('input', (e) => renderFilteredLists(e.target.value));
+            }
+
+            renderList() {
+                const todoList = document.getElementById('todoList');
+                todoList.innerHTML = '';
+                const list = this.data.lists.find(l => l.name === this.currentList);
+                if (!list) return;
+                const items = this.data.items
+                    .filter(i => i.list_id === list.id)
+                    .sort((a, b) => a.position - b.position);
+                items.forEach((item, index) => {
+                    const itemDiv = document.createElement('div');
+                    itemDiv.className = `list-item draggable ${index < 3 ? 'top-tier' : index < 5 ? 'mid-tier' : 'bottom-tier'}`;
+                    itemDiv.setAttribute('data-index', index);
+                    itemDiv.innerHTML = `
+                        <div class="list-item-content">
+                            <span class="item-number">${index + 1}.</span>
+                            <div class="editable flex-grow-1" onclick="todoApp.editItem(${index}, this)">${item.text}</div>
+                            <a href="#" class="delete-item-btn text-danger" onclick="todoApp.deleteItem(${index})">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-trash" viewBox="0 0 16 16">
+                                    <path d="M5.5 5.5A.5.5 0 0 1 6 5h4a.5.5 0 0 1 .5.5v7a.5.5 0 0 1-.5.5H6a.5.5 0 0 1-.5-.5v-7zm-1-.5a.5.5 0 0 1 .5-.5h6a.5.5 0 0 1 .5.5v8a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-8z"/>
+                                    <path d="M14 3.5V4h-1v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V4H2v-.5A1.5 1.5 0 0 1 3.5 2h9A1.5 1.5 0 0 1 14 3.5zM4 4h8v-.5a.5.5 0 0 0-.5-.5h-7a.5.5 0 0 0-.5.5V4z"/>
+                                </svg>
+                            </a>
+                        </div>
+                    `;
+                    todoList.appendChild(itemDiv);
+                });
+
+                if (this.currentList === 'Wants') {
+                    const buttonContainer = document.createElement('div');
+                    buttonContainer.className = 'action-buttons';
+                    const exportButton = document.createElement('button');
+                    exportButton.className = 'btn btn-outline-secondary';
+                    exportButton.innerText = 'Export JSON';
+                    exportButton.addEventListener('click', () => this.exportDatabase());
+                    buttonContainer.appendChild(exportButton);
+
+                    const importButton = document.createElement('button');
+                    importButton.className = 'btn btn-outline-secondary';
+                    importButton.innerText = 'Import JSON';
+                    importButton.addEventListener('click', () => document.getElementById('importDbInput').click());
+                    buttonContainer.appendChild(importButton);
+
+                    todoList.appendChild(buttonContainer);
+                }
+
+                const draggables = todoList.querySelectorAll('.draggable');
+                draggables.forEach(draggable => {
+                    draggable.setAttribute('draggable', 'true');
+                    draggable.addEventListener('dragstart', (e) => {
+                        draggable.classList.add('dragging');
+                        e.dataTransfer.setData('text/plain', draggable.dataset.index);
+                    });
+                    draggable.addEventListener('dragend', () => {
+                        draggable.classList.remove('dragging');
+                    });
+                    draggable.addEventListener('dragover', (e) => {
+                        e.preventDefault();
+                    });
+                    draggable.addEventListener('drop', (e) => {
+                        e.preventDefault();
+                        const fromIndex = parseInt(e.dataTransfer.getData('text/plain'));
+                        const toIndex = parseInt(draggable.dataset.index);
+                        if (fromIndex !== toIndex) {
+                            this.reorderItems(fromIndex, toIndex);
+                        }
+                    });
+                });
+
+                let touchStartY = 0;
+                let touchElement = null;
+                let touchIndex = null;
+
+                draggables.forEach(draggable => {
+                    draggable.addEventListener('touchstart', (e) => {
+                        touchElement = draggable;
+                        touchIndex = parseInt(draggable.dataset.index);
+                        touchStartY = e.touches[0].clientY;
+                        draggable.classList.add('dragging');
+                    }, { passive: true });
+
+                    draggable.addEventListener('touchmove', (e) => {
+                        e.preventDefault();
+                        const touchY = e.touches[0].clientY;
+                        const elements = [...todoList.querySelectorAll('.draggable')];
+                        const currentElement = elements.find(el => {
+                            const rect = el.getBoundingClientRect();
+                            return touchY >= rect.top && touchY <= rect.bottom;
+                        });
+                        if (currentElement && currentElement !== touchElement) {
+                            const newIndex = parseInt(currentElement.dataset.index);
+                            if (newIndex !== touchIndex) {
+                                this.reorderItems(touchIndex, newIndex);
+                                touchIndex = newIndex;
+                                touchElement = currentElement;
+                            }
+                        }
+                    }, { passive: false });
+
+                    draggable.addEventListener('touchend', () => {
+                        draggable.classList.remove('dragging');
+                        touchElement = null;
+                        touchIndex = null;
+                    });
+                });
+            }
+
+            loadList() {
+                this.currentList = 'Wants';
+                this.updateTitle();
+                this.renderList();
+                this.renderMenu();
+            }
         }
+
         const todoApp = new TodoApp();
     </script>
 </body>
